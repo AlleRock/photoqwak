@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>PhotoQwak</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="PhotoQwak">
+    <link rel="apple-touch-icon" href="https://raw.githubusercontent.com/AlleRock/photoqwak/main/icona.png">
+    
+    <script src="https://unpkg.com/dexie/dist/dexie.js"></script>
+    <style>
+        :root { 
+            --primary: #007AFF; 
+            --bg: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            --card-bg: rgba(255, 255, 255, 0.7);
+            --text: #1d1d1f;
+            --input-bg: rgba(255, 255, 255, 0.8);
+            --danger: #ff3b30;
+            --accent: #5856d6;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --primary: #0a84ff;
+                --bg: linear-gradient(135deg, #1c1c1e 0%, #000000 100%);
+                --card-bg: rgba(44, 44, 46, 0.8);
+                --text: #ffffff;
+                --input-bg: rgba(58, 58, 60, 0.9);
+                --danger: #ff453a;
+                --accent: #5e5ce6;
+            }
+        }
+
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background: var(--bg);
+            margin: 0; 
+            padding: env(safe-area-inset-top) 20px 120px 20px; 
+            min-height: 100vh;
+            color: var(--text);
+            transition: background 0.3s ease;
+        }
+
+        h1 { text-align: center; font-size: 36px; font-weight: 900; margin-top: 20px; margin-bottom: 30px; letter-spacing: -1px; }
+
+        .header-controls {
+            max-width: 600px;
+            margin: 0 auto 30px auto;
+            display: flex;
+            gap: 10px;
+            background: var(--card-bg);
+            padding: 10px;
+            border-radius: 20px;
+            backdrop-filter: blur(15px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+
+        input[type="text"] { 
+            flex: 1; padding: 12px 18px; border-radius: 15px; border: none; 
+            font-size: 16px; outline: none; background: var(--input-bg); color: var(--text);
+        }
+
+        .btn { 
+            border: none; padding: 12px 20px; border-radius: 15px; font-weight: 700; 
+            cursor: pointer; color: white; transition: all 0.3s ease;
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn:active { transform: scale(0.95); }
+        .btn-add { background: var(--primary); }
+        .btn-backup { background: var(--accent); flex: 1; }
+        .btn-danger { background: var(--danger); }
+        .btn-icon { padding: 8px; border-radius: 12px; }
+
+        .folder-card { 
+            max-width: 800px; margin: 0 auto 25px auto;
+            background: var(--card-bg); border-radius: 24px; padding: 20px; 
+            backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        .folder-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .folder-title { font-weight: 800; font-size: 20px; display: flex; align-items: center; gap: 10px; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 12px; }
+        .grid img { 
+            width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 16px; 
+            background: #333; cursor: pointer; transition: transform 0.3s;
+        }
+
+        #viewer { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.95); z-index: 3000; justify-content: center; align-items: center; flex-direction: column; 
+            backdrop-filter: blur(10px);
+        }
+        #viewer img { max-width: 95%; max-height: 80%; border-radius: 15px; }
+
+        .footer { 
+            position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+            width: 90%; max-width: 500px; background: var(--card-bg); 
+            backdrop-filter: blur(25px); padding: 15px; display: flex; gap: 10px; 
+            border-radius: 25px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); z-index: 100; 
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <h1>PhotoQwak</h1>
+    
+    <div class="header-controls">
+        <input type="text" id="folderName" placeholder="Nuova cartella...">
+        <button class="btn btn-add" onclick="createFolder()">Crea</button>
+    </div>
+
+    <div id="app"></div>
+
+    <div id="viewer" onclick="closeViewer()">
+        <img id="viewerImg" src="">
+        <div class="viewer-nav">
+            <button class="btn btn-add" id="shareBtn">Salva</button>
+            <button class="btn btn-danger" id="deleteBtn">Elimina</button>
+        </div>
+    </div>
+
+    <div class="footer">
+        <button class="btn btn-backup" onclick="exportJSON()">Esporta</button>
+        <button class="btn btn-backup" onclick="document.getElementById('importFile').click()">Importa</button>
+    </div>
+
+    <input type="file" id="fileInput" class="hidden" accept="image/*" multiple>
+    <input type="file" id="importFile" class="hidden" accept=".json" onchange="importJSON(event)">
+
+    <script>
+        const db = new Dexie("PhotoQwakDB");
+        db.version(1).stores({ folders: '++id, name', photos: '++id, folderId, data' });
+
+        let currentFolderId = null;
+
+        async function renderApp() {
+            const app = document.getElementById('app');
+            app.innerHTML = '';
+            const folders = await db.folders.toArray();
+            for (const f of folders) {
+                const photos = await db.photos.where('folderId').equals(f.id).toArray();
+                const card = document.createElement('div');
+                card.className = 'folder-card';
+                card.innerHTML = `
+                    <div class="folder-header">
+                        <span class="folder-title" onclick="renameFolder(${f.id}, '${f.name}')">📁 ${f.name}</span>
+                        <div style="display:flex; gap:5px;">
+                            <button class="btn btn-add btn-icon" onclick="openPicker(${f.id})">+</button>
+                            <button class="btn btn-danger btn-icon" onclick="deleteFolder(${f.id})">x</button>
+                        </div>
+                    </div>
+                    <div class="grid"></div>
+                `;
+                const grid = card.querySelector('.grid');
+                photos.forEach(p => {
+                    const img = document.createElement('img');
+                    img.src = p.data;
+                    img.onclick = (e) => { e.stopPropagation(); openViewer(p.data, p.id); };
+                    grid.appendChild(img);
+                });
+                app.appendChild(card);
+            }
+        }
+
+        async function createFolder() {
+            const name = document.getElementById('folderName').value;
+            if (name) { await db.folders.add({ name }); document.getElementById('folderName').value = ''; renderApp(); }
+        }
+
+        async function deleteFolder(id) {
+            if(confirm("Eliminare la cartella?")) {
+                await db.folders.delete(id);
+                await db.photos.where('folderId').equals(id).delete();
+                renderApp();
+            }
+        }
+
+        async function renameFolder(id, oldName) {
+            const newName = prompt("Rinomina:", oldName);
+            if (newName && newName !== oldName) { await db.folders.update(id, { name: newName }); renderApp(); }
+        }
+
+        function openPicker(id) { currentFolderId = id; document.getElementById('fileInput').click(); }
+
+        document.getElementById('fileInput').onchange = async (e) => {
+            for (const file of e.target.files) {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = async () => {
+                    await db.photos.add({ folderId: currentFolderId, data: reader.result });
+                    renderApp();
+                };
+            }
+        };
+
+        function openViewer(src, id) {
+            document.getElementById('viewerImg').src = src;
+            document.getElementById('viewer').style.display = 'flex';
+            document.getElementById('shareBtn').onclick = (e) => {
+                e.stopPropagation();
+                const link = document.createElement('a'); link.href = src; link.download = "photo.jpg"; link.click();
+            };
+            document.getElementById('deleteBtn').onclick = async (e) => {
+                e.stopPropagation();
+                if(confirm("Eliminare la foto?")) { await db.photos.delete(id); closeViewer(); renderApp(); }
+            };
+        }
+
+        function closeViewer() { document.getElementById('viewer').style.display = 'none'; }
+
+        async function exportJSON() {
+            const data = { folders: await db.folders.toArray(), photos: await db.photos.toArray() };
+            const blob = new Blob([JSON.stringify(data)], {type: "application/json"});
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = "backup_photoqwak.json";
+            a.click();
+        }
+
+        async function importJSON(e) {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = async (ev) => {
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    for (const f of data.folders) {
+                        const newId = await db.folders.add({ name: f.name });
+                        const fPhotos = data.photos.filter(p => p.folderId === f.id);
+                        for(const p of fPhotos) { await db.photos.add({ folderId: newId, data: p.data }); }
+                    }
+                    renderApp();
+                } catch(err) { alert("Errore nel file."); }
+            };
+            reader.readAsText(file);
+        }
+
+        renderApp();
+    </script>
+</body>
+</html>
