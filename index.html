@@ -87,7 +87,6 @@
         }
 
         .folder-info { font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 10px; cursor: pointer; flex: 1; }
-
         .folder-actions { display: flex; gap: 8px; align-items: center; }
         
         .btn-move { 
@@ -204,13 +203,13 @@
                 const div = document.createElement('div');
                 div.className = 'folder-item';
                 div.innerHTML = `
-                    <div class="folder-info" onclick="openFolder(${f.id}, '${f.name}')">
+                    <div class="folder-info" onclick="openFolder(${f.id}, '${f.name.replace(/'/g, "\\'")}')">
                         📁 <span>${f.name}</span> <span style="font-size:12px; opacity:0.5">(${count})</span>
                     </div>
                     <div class="folder-actions">
                         <button class="btn btn-move" onclick="moveFolder(${f.id}, -1)">▲</button>
                         <button class="btn btn-move" onclick="moveFolder(${f.id}, 1)">▼</button>
-                        <button class="btn btn-add" style="padding:8px" onclick="renameFolder(${f.id}, '${f.name}')">✎</button>
+                        <button class="btn btn-add" style="padding:8px" onclick="renameFolder(${f.id}, '${f.name.replace(/'/g, "\\'")}')">✎</button>
                         <button class="btn btn-danger" style="padding:8px" onclick="deleteFolder(${f.id})">x</button>
                     </div>
                 `;
@@ -326,18 +325,34 @@
         }
 
         async function importJSON(e) {
+            if(!confirm("L'importazione sostituirà tutti i dati attuali. Vuoi procedere?")) return;
+            
             const file = e.target.files[0];
             const reader = new FileReader();
             reader.onload = async (ev) => {
-                const data = JSON.parse(ev.target.result);
-                for (const f of data.folders) {
-                    const newId = await db.folders.add({ name: f.name, order: f.order || 0 });
-                    const fPhotos = data.photos.filter(p => p.folderId === f.id);
-                    for(const p of fPhotos) { await db.photos.add({ folderId: newId, data: p.data }); }
+                try {
+                    const data = JSON.parse(ev.target.result);
+                    
+                    // 1. PULISCE TUTTO IL DATABASE PRIMA DI IMPORTARE
+                    await db.folders.clear();
+                    await db.photos.clear();
+                    
+                    // 2. IMPORTA I NUOVI DATI
+                    for (const f of data.folders) {
+                        const newId = await db.folders.add({ name: f.name, order: f.order || 0 });
+                        const fPhotos = data.photos.filter(p => p.folderId === f.id);
+                        for(const p of fPhotos) { 
+                            await db.photos.add({ folderId: newId, data: p.data }); 
+                        }
+                    }
+                    renderFolders();
+                    alert("Importazione completata con successo!");
+                } catch(err) {
+                    alert("Errore durante l'importazione: file non valido.");
                 }
-                renderFolders();
             };
             reader.readAsText(file);
+            e.target.value = ''; // Resetta il campo file
         }
 
         renderFolders();
